@@ -1,4 +1,4 @@
-package assignment_pkg
+package data_analysis
 
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.functions._
