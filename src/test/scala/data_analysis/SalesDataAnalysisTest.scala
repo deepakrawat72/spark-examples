@@ -1,6 +1,8 @@
 package data_analysis
 
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.functions._
 import org.scalatest.{FeatureSpec, GivenWhenThen, Matchers}
 
 class SalesDataAnalysisTest extends FeatureSpec with GivenWhenThen with Matchers with TestSparkSessionProvider {
@@ -59,8 +61,41 @@ class SalesDataAnalysisTest extends FeatureSpec with GivenWhenThen with Matchers
         (1, 3, 3, "2020-03-07", 11, "bill7")
       )).toDF("order_id", "product_id", "seller_id", "date", "num_pieces_sold", "bill_raw_text")
 
-     val runningAvg = SalesDataAnalysis.runningAvgOfSalesEvery3Months(salesData)
-      runningAvg.show(false)
+      salesData.withColumn("cumulativeSum", sum("num_pieces_sold")
+        .over(Window.partitionBy("product_id").orderBy(month(col("date")))))
+        .show(false)
+
+      val runningAvg = SalesDataAnalysis.runningAvgOfSalesEvery3Months(salesData)
+//      runningAvg.show(false)
+    }
+
+    scenario("Find total sales by each quarter") {
+      Given("Sales data")
+      When("totalSalesByQuarterly is invoked")
+      import spark.implicits._
+      val salesData = spark.sparkContext.parallelize(List(
+        (1, 1, 1, "2020-07-07", 100, "bill1"),
+        (1, 1, 1, "2020-07-07", 50, "bill2"),
+        (1, 1, 2, "2020-08-07", 25, "bill3"),
+        (1, 2, 1, "2020-09-07", 27, "bill4"),
+        (1, 3, 1, "2020-10-07", 27, "bill5"),
+        (1, 3, 2, "2020-10-07", 29, "bill6"),
+        (1, 3, 3, "2020-11-07", 11, "bill7"),
+        (1, 3, 2, "2020-12-07", 29, "bill6"),
+        (1, 3, 3, "2020-06-07", 11, "bill7"),
+        (1, 3, 2, "2020-05-07", 29, "bill6"),
+        (1, 3, 3, "2020-01-07", 11, "bill7"),
+        (1, 3, 3, "2021-03-07", 11, "bill7"),
+        (1, 3, 2, "2021-01-07", 29, "bill6"),
+        (1, 3, 3, "2021-02-07", 11, "bill7"),
+        (1, 3, 2, "2021-05-07", 29, "bill6"),
+        (1, 3, 3, "2021-05-07", 11, "bill7"),
+        (1, 3, 3, "2021-07-07", 11, "bill7")
+      )).toDF("order_id", "product_id", "seller_id", "date", "num_pieces_sold", "bill_raw_text")
+
+      val quaterlySales = SalesDataAnalysis.totalSalesByQuarterly(salesData)
+      quaterlySales.show(false)
+      //      runningAvg.show(false)
     }
   }
 }

@@ -16,9 +16,9 @@ object SalesDataAnalysis extends App with SparkSessionProvider {
     .csv("./src/main/resources/raw_files/sellers.csv")
 
   //How many orders, products, sellers are there in the data
-    println(salesData.count())
-    println(productsData.count())
-    println(sellerData.count())
+  println(salesData.count())
+  println(productsData.count())
+  println(sellerData.count())
 
 
   //How many products have been sold at-least once?
@@ -58,7 +58,7 @@ object SalesDataAnalysis extends App with SparkSessionProvider {
     val aggData = salesData.as("sales_data")
       .join(sellerData.as("seller_data"), salesData("seller_id") === sellerData("seller_id"))
       .groupBy("product_id", "seller_data.seller_id")
-          .agg(sum("num_pieces_sold").as("total_order_sold"))
+      .agg(sum("num_pieces_sold").as("total_order_sold"))
       .withColumn("rank_desc",
         dense_rank().over(Window.partitionBy("product_id").orderBy(desc("total_order_sold"))))
       .withColumn("rank_asc",
@@ -84,11 +84,11 @@ object SalesDataAnalysis extends App with SparkSessionProvider {
         && col("single_seller_product_id") === col("product_id"), "left_anti")
 
     singleSeller.select(col("single_seller_product_id").as("product_id"),
-                        col("single_seller_id").as("seller_id"), col("type"))
+      col("single_seller_id").as("seller_id"), col("type"))
       .union(secondSeller.select(
-                                  col("second_seller_product_id").as("product_id"),
-                                  col("second_seller_id").as("seller_id"),
-                                  col("type"))
+        col("second_seller_product_id").as("product_id"),
+        col("second_seller_id").as("seller_id"),
+        col("type"))
       ).union(least_seller)
   }
 
@@ -103,7 +103,32 @@ object SalesDataAnalysis extends App with SparkSessionProvider {
 
     salesData.groupBy(col("product_id"), month(col("date")).as("month"))
       .agg(sum(col("num_pieces_sold")).as("total_pieces_sold"))
-      .withColumn("running avg every 3 months", sum("total_pieces_sold").over(runningAvgWindow))
+      .withColumn("running avg every 3 months", avg("total_pieces_sold")
+        .over(runningAvgWindow))
   }
 
+  def totalSalesByQuarterly(salesData: Dataset[Row]): DataFrame = {
+    val quarterlySalesData =
+      salesData.select(col("date"), col("num_pieces_sold"))
+        .withColumn("year", year(col("date")))
+        .withColumn("quarter",
+          when(month(col("date")) >= 1 && month(col("date")) <= 3, "1")
+            .when(month(col("date")) >= 4 && month(col("date")) <= 6, "2")
+            .when(month(col("date")) >= 7 && month(col("date")) <= 9, "3")
+            .when(month(col("date")) >= 10 && month(col("date")) <= 12, "4")
+        ).drop("date")
+        .groupBy("year")
+
+    quarterlySalesData
+      .agg(
+        sum(when(col("quarter") === 1, col("num_pieces_sold")).otherwise(lit(0))).as("1st Quarter Sales"),
+        sum(when(col("quarter") === 2, col("num_pieces_sold")).otherwise(lit(0))).as("2nd Quarter Sales"),
+        sum(when(col("quarter") === 3, col("num_pieces_sold")).otherwise(lit(0))).as("3rd Quarter Sales"),
+        sum(when(col("quarter") === 4, col("num_pieces_sold")).otherwise(lit(0))).as("4th Quarter Sales")
+      )
+
+    //using pivot
+    quarterlySalesData.pivot("quarter").agg(coalesce(sum("num_pieces_sold"), lit(0)))
+      .toDF("year", "1st Quarter Sales", "2nd Quarter Sales", "3rd Quarter Sales", "4th Quarter Sales")
+  }
 }
