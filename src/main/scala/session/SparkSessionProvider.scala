@@ -8,5 +8,4 @@ trait SparkSessionProvider {
     .config("spark.driver.memory", "0.5g")
     //.enableHiveSupport()
     .getOrCreate()
-
 }
